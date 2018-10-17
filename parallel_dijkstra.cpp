@@ -67,12 +67,16 @@ void parallel_dijkstra(int id, int dist[V], int prev[V])
 		// Wait for incoming events (from other nodes) and receive them
 		{
 			// - TODO 6-a: lock this thread mutex to protect access to global data
-
+			std::unique_lock<std::mutex> lock(mutexes[u]);
 			if (messages[u].empty())
 			{
+				event[u].wait(lock);
 				// TODO 6-b: wait for a message from another node
 			}
-
+			if(shouldFinish)
+			{
+				return;
+			}
 			// TODO 6-c: check if 'shouldFinish' is true to finish this thread
 
 			// Get the incoming message
@@ -106,6 +110,10 @@ void parallel_dijkstra(int id, int dist[V], int prev[V])
 
 		// TODO 7: Create a message for the neigbouring nodes
 		// - the message needs to contain the information about this thread's node
+		Message msg;
+		msg.dist = dist[u];
+		msg.sender = prev[u];
+		
 
 		// Send messages to neighbour nodes to update their state
 		for (int v = 0; v < V; ++v)
@@ -117,6 +125,10 @@ void parallel_dijkstra(int id, int dist[V], int prev[V])
 				// - lock the neighbor's mutex
 				// - enqueue the message into its queue
 				// - notify the neighbor about this event (use notify_one)
+				std::unique_lock<std::mutex> lck(mutexes[v]); // - protects the message queue of the thread
+				messages[v].push(msg);                        // - pushes the message into the queue of messages for the thread
+				event[v].notify_one();                        // - notifies the thread that it has a message
+				
 			}
 		}
 	}
@@ -149,6 +161,8 @@ int main(int argc, char **argv)
 	// TODO 1: Using a loop...
 	for (int i = 0; i < V; ++i)
 	{
+		dist[i] = Inf;
+		prev[i] = NaN;
 		// - initialize 'dist' and 'prev' array elements to Inf and NaN respectively
 	}
 
@@ -156,6 +170,9 @@ int main(int argc, char **argv)
 	// TODO 2: Using a loop...
 	for (int i = 0; i < V; ++i)
 	{
+		
+		threads[i] = std::thread(parallel_dijkstra,i, dist, prev);
+
 		// - create a thread for each node store them in the global array 'threads'
 		// - make them execute the 'parallel_dijkstra' function
 		// - pass each thread their id, and the two arrays 'dist' and 'prev'
@@ -183,6 +200,9 @@ int main(int argc, char **argv)
 	// TODO 4: Using a loop... notify all threads to finish
 	for (int i = 0; i < V; ++i)
 	{
+		std::unique_lock<std::mutex> lock(mutexes[i]);
+		shouldFinish = true;
+		event[i].notify_all();
 		// - protect each node critical section (locking their mutex)
 		// - set the global 'shouldFinish' to true
 		// - notify the thread that an event occurred
@@ -192,6 +212,8 @@ int main(int argc, char **argv)
 	// TODO 5: Using a loop...
 	for (int i = 0; i < V; ++i)
 	{
+		threads[i].join();
+
 		// - wait for all threads to finish using thread::join()
 	}
 
