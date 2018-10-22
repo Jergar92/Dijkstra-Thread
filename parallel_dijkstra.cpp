@@ -112,7 +112,7 @@ void parallel_dijkstra(int id, int dist[V], int prev[V])
 		// - the message needs to contain the information about this thread's node
 		Message msg;
 		msg.dist = dist[u];
-		msg.sender = prev[u];
+		msg.sender = u;
 		
 
 		// Send messages to neighbour nodes to update their state
